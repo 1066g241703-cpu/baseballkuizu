@@ -1,0 +1,405 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src * data: gap: content: https://ssl.gstatic.com; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'">
+    <script src="components/loader.js"></script>
+    <script src="classic.js"></script>
+    <link rel="stylesheet" href="components/loader.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script>
+        let apikey = "9a6894ae-3d07-4753-8b90-b45c94aa48c6";
+        let quizList = [];       // 取得した全問題を格納する配列
+        let currentIndex = 0;   // 現在の問題のインデックス
+        let score = 0;          // 正解数のカウント
+
+        // クイズゲームの開始（問題の一括取得とシャッフル）
+        function startQuiz() {
+            score = 0;
+            currentIndex = 0;
+            quizList = [];
+            
+            showScreen("quiz-screen");
+            document.getElementById("quiz-text").innerText = "問題を読み込み中...";
+            document.getElementById("result-box").style.display = "none";
+            document.getElementById("btn-area").style.display = "none";
+            document.getElementById("score-text").innerText = "正解数: 0問";
+
+            let url = "https://db.monaca.education/select?apikey=" + apikey;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(db => {
+                    if (db.records && db.records.length > 0) {
+                        // 取得した問題をランダムに並び替え
+                        quizList = shuffleArray(db.records);
+                        showCurrentQuiz();
+                    } else {
+                        document.getElementById("quiz-text").innerText = "問題が見つかりませんでした。";
+                    }
+                });
+        }
+
+        // 配列をランダムにシャッフルする関数（フィッシャー–イェーツのシャッフル）
+        function shuffleArray(array) {
+            let clone = [...array];
+            for (let i = clone.length - 1; i > 0; i--) {
+                let j = Math.floor(Math.random() * (i + 1));
+                [clone[i], clone[j]] = [clone[j], clone[i]];
+            }
+            return clone;
+        }
+
+        // 現在の問題を表示（全問終了チェック付き）
+        function showCurrentQuiz() {
+            // 全問題を解き終わったか判定
+            if (currentIndex >= quizList.length) {
+                showEndScreen();
+                return;
+            }
+
+            let currentQuiz = quizList[currentIndex];
+            document.getElementById("score-text").innerText = `問題 ${currentIndex + 1} / ${quizList.length}`;
+            document.getElementById("quiz-text").innerText = currentQuiz.text0;
+            document.getElementById("result-box").style.display = "none";
+            document.getElementById("btn-area").style.display = "flex";
+        }
+
+        // ◯ / ✕ ボタンを押したときの判定
+        function checkAnswer(userChoice) {
+            let currentQuiz = quizList[currentIndex];
+            let isCorrect = (userChoice === currentQuiz.int0);
+            let resultBox = document.getElementById("result-box");
+            
+            document.getElementById("btn-area").style.display = "none";
+            resultBox.style.display = "block";
+
+            if (isCorrect) {
+                score++;
+                resultBox.className = "result-box correct";
+                resultBox.innerHTML = `
+                    <h2>🎉 正解！</h2>
+                    <p>${currentQuiz.text1 || ""}</p>
+                    <button class="main-btn primary" onclick="nextQuiz()">次の問題へ ➔</button>
+                `;
+            } else {
+                resultBox.className = "result-box incorrect";
+                resultBox.innerHTML = `
+                    <h2>😢 不正解...</h2>
+                    <p>${currentQuiz.text1 || ""}</p>
+                    <button class="main-btn primary" onclick="nextQuiz()">次の問題へ ➔</button>
+                `;
+            }
+        }
+
+        // 次の問題に進む
+        function nextQuiz() {
+            currentIndex++;
+            showCurrentQuiz();
+        }
+
+        // 全問終了画面の表示
+        function showEndScreen() {
+            document.getElementById("score-text").innerText = "結果発表";
+            document.getElementById("quiz-text").innerText = "すべての問題が終了しました！";
+            document.getElementById("btn-area").style.display = "none";
+            
+            let resultBox = document.getElementById("result-box");
+            resultBox.style.display = "block";
+            resultBox.className = "result-box correct";
+            resultBox.innerHTML = `
+                <h2>🏆 お疲れ様でした！</h2>
+                <p class="final-score">最終スコア: ${quizList.length}問中 ${score}問 正解</p>
+                <button class="main-btn primary" onclick="startQuiz()">もう一度挑戦する ➔</button>
+            `;
+        }
+
+        // 登録フォームを開く
+        function openInsertScreen() {
+            showScreen("insert-screen");
+            document.getElementById("input-text0").value = "";
+            document.getElementById("input-text1").value = "";
+            document.getElementById("ans-circle").checked = true;
+            document.getElementById("insert-msg").innerText = "";
+        }
+
+        // クイズの送信
+        function insert() {
+            let text0 = document.getElementById("input-text0").value;
+            let text1 = document.getElementById("input-text1").value;
+            let int0 = document.getElementById("ans-circle").checked ? 1 : 0;
+
+            if (!text0) {
+                alert("問題文を入力してください");
+                return;
+            }
+
+            let url = "https://db.monaca.education/insert?apikey=" + apikey + 
+                      "&text0=" + encodeURIComponent(text0) + 
+                      "&int0=" + int0 + 
+                      "&text1=" + encodeURIComponent(text1 || "");
+
+            fetch(url)
+                .then(res => res.json())
+                .then(result => {
+                    document.getElementById("insert-msg").innerText = "✨ クイズを登録しました！";
+                    document.getElementById("input-text0").value = "";
+                    document.getElementById("input-text1").value = "";
+            });
+        }
+
+        // 画面切り替えの共通関数
+        function showScreen(screenId) {
+            document.getElementById("menu-screen").style.display = "none";
+            document.getElementById("quiz-screen").style.display = "none";
+            document.getElementById("insert-screen").style.display = "none";
+            document.getElementById(screenId).style.display = "block";
+        }
+
+        // トップに戻る
+        function goHome() {
+            showScreen("menu-screen");
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #000000;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: #ffffff;
+            border: 4px solid #ffcc00;
+            border-radius: 20px;
+            padding: 24px;
+            width: 100%;
+            max-width: 340px;
+            box-shadow: 0 0 20px rgba(255, 204, 0, 0.3), 0 10px 25px rgba(0, 0, 0, 0.8);
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        h1, h2 {
+            color: #111111;
+            margin-top: 0;
+            font-weight: 900;
+            letter-spacing: 1px;
+        }
+
+        .score-badge {
+            display: inline-block;
+            background-color: #ffcc00;
+            color: #111111;
+            font-weight: 900;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 1rem;
+            margin-bottom: 15px;
+            border: 2px solid #111111;
+            box-shadow: 2px 2px 0px #111111;
+        }
+
+        .form-group {
+            text-align: left;
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #111111;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #111111;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            background-color: #fffde6;
+        }
+
+        .form-control:focus {
+            border-color: #ffcc00;
+            background-color: #ffffff;
+            outline: none;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+
+        .radio-label {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #111111;
+            cursor: pointer;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .circle-btn, .cross-btn {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            font-size: 2.2rem;
+            font-weight: 900;
+            border: 3px solid #111111;
+            cursor: pointer;
+            box-shadow: 0 5px 0px #111111;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .circle-btn { 
+            background: #ffcc00; 
+            color: #111111;
+        }
+
+        .cross-btn { 
+            background: #111111; 
+            color: #ffffff;
+        }
+
+        .circle-btn:active, .cross-btn:active, .main-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 0px #111111;
+        }
+
+        .main-btn {
+            width: 100%;
+            padding: 14px;
+            margin: 8px 0;
+            font-size: 1.1rem;
+            font-weight: 900;
+            border: 3px solid #111111;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 0px #111111;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .primary { 
+            background: #ffcc00; 
+            color: #111111;
+        }
+
+        .secondary { 
+            background: #111111; 
+            color: #ffffff;
+        }
+
+        .sub { 
+            background: #e0e0e0; 
+            color: #111111;
+            margin-top: 15px; 
+        }
+
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 12px;
+            border: 3px solid #111111;
+            box-shadow: 3px 3px 0px #111111;
+        }
+
+        .correct { 
+            background-color: #fff3bf; 
+            color: #111111; 
+        }
+
+        .incorrect { 
+            background-color: #111111; 
+            color: #ffffff; 
+        }
+        
+        .final-score {
+            font-weight: 900;
+            font-size: 1.1rem;
+            margin: 10px 0;
+        }
+
+        .success-msg {
+            color: #111111;
+            font-weight: 900;
+            margin-top: 10px;
+            background: #ffcc00;
+            padding: 8px;
+            border-radius: 6px;
+            border: 2px solid #111111;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- メニュー画面 -->
+    <div id="menu-screen" class="card">
+        <h1>2択クイズアプリ</h1>
+        <button class="main-btn primary" onclick="startQuiz()">クイズに回答</button>
+        <button class="main-btn secondary" onclick="openInsertScreen()">クイズを登録</button>
+    </div>
+
+    <!-- クイズ回答画面 -->
+    <div id="quiz-screen" class="card" style="display: none;">
+        <div id="score-text" class="score-badge">問題 1 / 1</div>
+        <h2 id="quiz-text">問題を読み込み中...</h2>
+        
+        <div id="btn-area" class="btn-group">
+            <button class="circle-btn" onclick="checkAnswer(1)">◯</button>
+            <button class="cross-btn" onclick="checkAnswer(0)">✕</button>
+        </div>
+
+        <div id="result-box" class="result-box" style="display: none;"></div>
+
+        <button class="main-btn sub" onclick="goHome()">トップに戻る</button>
+    </div>
+
+    <!-- クイズ登録画面 -->
+    <div id="insert-screen" class="card" style="display: none;">
+        <h2>新しい問題を作る</h2>
+        
+        <div class="form-group">
+            <label>問題文</label>
+            <input type="text" id="input-text0" class="form-control" placeholder="例: 日本で一番高い山は富士山である">
+        </div>
+
+        <div class="form-group">
+            <label>正解</label>
+            <div class="radio-group">
+                <label class="radio-label"><input type="radio" id="ans-circle" name="ans" value="1" checked> ◯</label>
+                <label class="radio-label"><input type="radio" id="ans-cross" name="ans" value="0"> ✕</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>解説文（任意）</label>
+            <input type="text" id="input-text1" class="form-control" placeholder="例: 標高3,776mです">
+        </div>
+
+        <button class="main-btn secondary" onclick="insert()">登録する</button>
+        <div id="insert-msg" class="success-msg"></div>
+
+        <button class="main-btn sub" onclick="goHome()">トップに戻る</button>
+    </div>
+
+</body>
+</html>
